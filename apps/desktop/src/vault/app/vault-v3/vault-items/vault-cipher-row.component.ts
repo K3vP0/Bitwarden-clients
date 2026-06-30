@@ -2,10 +2,12 @@
 // @ts-strict-ignore
 import { NgClass } from "@angular/common";
 import { Component, HostListener, computed, inject, input, output, viewChild } from "@angular/core";
+import { toSignal } from "@angular/core/rxjs-interop";
 
 import { PremiumBadgeComponent } from "@bitwarden/angular/billing/components/premium-badge/premium-badge.component";
 import { IconComponent } from "@bitwarden/angular/vault/components/icon.component";
 import { Organization } from "@bitwarden/common/admin-console/models/domain/organization";
+import { DeviceType } from "@bitwarden/common/enums";
 import { I18nService } from "@bitwarden/common/platform/abstractions/i18n.service";
 import { PlatformUtilsService } from "@bitwarden/common/platform/abstractions/platform-utils.service";
 import { CipherType } from "@bitwarden/common/vault/enums";
@@ -29,6 +31,9 @@ import {
   GetOrgNameFromIdPipe,
   OrganizationNameBadgeComponent,
 } from "@bitwarden/vault";
+
+import { AutotypeVariant } from "../../../../autofill/models/autotype-variant";
+import { DesktopAutotypeService } from "../../../../autofill/services/desktop-autotype.service";
 
 import { VaultItemEvent } from "./vault-item-event";
 
@@ -99,6 +104,11 @@ export class VaultCipherRowComponent<C extends CipherViewLike> {
 
   private platformUtilsService = inject(PlatformUtilsService);
   private i18nService = inject(I18nService);
+  private desktopAutotypeService = inject(DesktopAutotypeService);
+
+  private readonly autotypeEnabled = toSignal(this.desktopAutotypeService.autotypeEnabled$, {
+    initialValue: false,
+  });
 
   protected readonly showArchiveButton = computed(() => {
     return (
@@ -316,6 +326,57 @@ export class VaultCipherRowComponent<C extends CipherViewLike> {
 
   protected editCipher() {
     this.onEvent.emit({ type: "editCipher", item: this.cipher() });
+  }
+
+  /**
+   * Whether autotype is available for this item at all: Windows desktop only, the
+   * feature enabled for the user, and an active (non-deleted/archived) login.
+   */
+  private readonly autotypeAvailable = computed(() => {
+    if (this.platformUtilsService.getDevice() !== DeviceType.WindowsDesktop) {
+      return false;
+    }
+    if (!this.autotypeEnabled()) {
+      return false;
+    }
+    const cipher = this.cipher();
+    if (this.isDeleted() || CipherViewLikeUtils.isArchived(cipher)) {
+      return false;
+    }
+    return CipherViewLikeUtils.getType(cipher) === CipherType.Login;
+  });
+
+  // Autotyping the password requires permission to view it and a password to type.
+  protected readonly canAutotypePassword = computed(() => {
+    if (!this.autotypeAvailable()) {
+      return false;
+    }
+    const cipher = this.cipher();
+    return cipher.viewPassword && CipherViewLikeUtils.hasCopyableValue(cipher, "password");
+  });
+
+  // The username + password sequence additionally requires a username to type.
+  protected readonly canAutotypeUsernamePassword = computed(() => {
+    if (!this.canAutotypePassword()) {
+      return false;
+    }
+    return CipherViewLikeUtils.hasCopyableValue(this.cipher(), "username");
+  });
+
+  protected autotypeUsernamePassword() {
+    this.onEvent.emit({
+      type: "autoType",
+      item: this.cipher(),
+      variant: AutotypeVariant.UsernamePassword,
+    });
+  }
+
+  protected autotypePassword() {
+    this.onEvent.emit({
+      type: "autoType",
+      item: this.cipher(),
+      variant: AutotypeVariant.Password,
+    });
   }
 
   protected viewCipher() {

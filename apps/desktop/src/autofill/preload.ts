@@ -7,6 +7,7 @@ import { RunCommandParams, RunCommandResult } from "../platform/main/autofill/na
 
 import { AutotypeConfig } from "./models/autotype-config";
 import { AutotypeMatchError } from "./models/autotype-errors";
+import { AutotypeVariant } from "./models/autotype-variant";
 import { AutotypeVaultData } from "./models/autotype-vault-data";
 import { AUTOTYPE_IPC_CHANNELS, SSH_AGENT_IPC_CHANNELS } from "./models/ipc-channels";
 
@@ -181,6 +182,9 @@ export default {
   },
   configureAutotype: (config: AutotypeConfig) => {
     ipcRenderer.send(AUTOTYPE_IPC_CHANNELS.CONFIGURE, config);
+  },
+  autotypeForCipher: (vaultData: AutotypeVaultData, variant: AutotypeVariant) => {
+    ipcRenderer.send(AUTOTYPE_IPC_CHANNELS.EXECUTE_FOR_CIPHER, { vaultData, variant });
   },
   toggleAutotype: (enable: boolean) => {
     ipcRenderer.send(AUTOTYPE_IPC_CHANNELS.TOGGLE, enable);

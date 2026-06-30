@@ -114,6 +114,7 @@ import {
 } from "@bitwarden/vault";
 
 import { DesktopHeaderComponent } from "../../../app/layout/header/desktop-header.component";
+import { DesktopAutotypeService } from "../../../autofill/services/desktop-autotype.service";
 import { AssignCollectionsDesktopComponent } from "../vault/assign-collections";
 
 import { AssignCollectionsDesktopDialogAdapter } from "./bulk-action-dialogs/assign-collections-desktop-dialog.adapter";
@@ -189,6 +190,7 @@ export class VaultComponent<C extends CipherViewLike> implements OnInit, OnDestr
   private vaultItemTransferService: VaultItemsTransferService = inject(VaultItemsTransferService);
   private platformUtilsService = inject(PlatformUtilsService);
   private totpService = inject(TotpService);
+  private desktopAutotypeService = inject(DesktopAutotypeService);
 
   private destroyRef = inject(DestroyRef);
   private cipherFormConfigService = inject(CipherFormConfigService);
@@ -662,6 +664,13 @@ export class VaultComponent<C extends CipherViewLike> implements OnInit, OnDestr
       case "editCipher": {
         const fullCipher = await this.cipherService.getFullCipherView(event.item);
         await this.editCipher(fullCipher);
+        break;
+      }
+      case "autoType": {
+        const cipher = await this.cipherService.getFullCipherView(event.item);
+        if (await this.passwordReprompt(cipher)) {
+          await this.desktopAutotypeService.autotypeCipher(cipher, event.variant);
+        }
         break;
       }
     }

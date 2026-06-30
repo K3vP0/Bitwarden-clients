@@ -6,6 +6,7 @@ import { BehaviorSubject, of } from "rxjs";
 import { AccountService } from "@bitwarden/common/auth/abstractions/account.service";
 import { DomainSettingsService } from "@bitwarden/common/autofill/services/domain-settings.service";
 import { BillingAccountProfileStateService } from "@bitwarden/common/billing/abstractions";
+import { DeviceType } from "@bitwarden/common/enums";
 import { ConfigService } from "@bitwarden/common/platform/abstractions/config/config.service";
 import { EnvironmentService } from "@bitwarden/common/platform/abstractions/environment.service";
 import { I18nService } from "@bitwarden/common/platform/abstractions/i18n.service";
@@ -18,6 +19,8 @@ import { LoginUriView } from "@bitwarden/common/vault/models/view/login-uri.view
 import { LoginView } from "@bitwarden/common/vault/models/view/login.view";
 import { CipherViewLike } from "@bitwarden/common/vault/utils/cipher-view-like-utils";
 import { CopyCipherFieldService } from "@bitwarden/vault";
+
+import { DesktopAutotypeService } from "../../../../autofill/services/desktop-autotype.service";
 
 import { VaultCipherRowComponent } from "./vault-cipher-row.component";
 
@@ -39,13 +42,20 @@ console.error = (...args: unknown[]) => {
 describe("VaultCipherRowComponent", () => {
   let fixture: ComponentFixture<VaultCipherRowComponent<CipherViewLike>>;
   let overlayContainer: OverlayContainer;
+  let autotypeEnabledSubject: BehaviorSubject<boolean>;
 
   beforeEach(async () => {
+    autotypeEnabledSubject = new BehaviorSubject<boolean>(false);
+
     await TestBed.configureTestingModule({
       imports: [VaultCipherRowComponent],
       providers: [
         { provide: I18nService, useValue: { t: (key: string) => key } },
         { provide: PlatformUtilsService, useValue: mock<PlatformUtilsService>() },
+        {
+          provide: DesktopAutotypeService,
+          useValue: { autotypeEnabled$: autotypeEnabledSubject.asObservable() },
+        },
         { provide: CopyCipherFieldService, useValue: mock<CopyCipherFieldService>() },
         { provide: AccountService, useValue: mock<AccountService>() },
         { provide: CipherService, useValue: mock<CipherService>() },
@@ -131,6 +141,46 @@ describe("VaultCipherRowComponent", () => {
     it("does not render the quick-action divider", () => {
       const content = openOptionsMenuAndGetContent();
       expect(content).not.toContain("bit-menu-divider");
+    });
+  });
+
+  describe("#cipherOptions menu — autotype items", () => {
+    beforeEach(() => {
+      (TestBed.inject(PlatformUtilsService).getDevice as jest.Mock).mockReturnValue(
+        DeviceType.WindowsDesktop,
+      );
+      fixture.componentRef.setInput("cipher", createLoginCipher());
+      fixture.componentRef.setInput("disabled", false);
+    });
+
+    it("renders both autotype items when enabled on Windows", () => {
+      autotypeEnabledSubject.next(true);
+
+      const content = openOptionsMenuAndGetContent();
+
+      expect(content).toContain("autoTypeUsernameAndPassword");
+      expect(content).toContain("autoTypePassword");
+    });
+
+    it("does not render autotype items when the feature is disabled", () => {
+      autotypeEnabledSubject.next(false);
+
+      const content = openOptionsMenuAndGetContent();
+
+      expect(content).not.toContain("autoTypeUsernameAndPassword");
+      expect(content).not.toContain("autoTypePassword");
+    });
+
+    it("does not render autotype items on non-Windows platforms", () => {
+      (TestBed.inject(PlatformUtilsService).getDevice as jest.Mock).mockReturnValue(
+        DeviceType.MacOsDesktop,
+      );
+      autotypeEnabledSubject.next(true);
+
+      const content = openOptionsMenuAndGetContent();
+
+      expect(content).not.toContain("autoTypeUsernameAndPassword");
+      expect(content).not.toContain("autoTypePassword");
     });
   });
 

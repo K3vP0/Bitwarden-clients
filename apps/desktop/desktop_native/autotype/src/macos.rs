@@ -5,3 +5,15 @@ pub fn get_foreground_window_title() -> anyhow::Result<String> {
 pub fn type_input(_input: &[u16], _keyboard_shortcut: &[String]) -> anyhow::Result<()> {
     todo!("Bitwarden does not yet support macOS autotype");
 }
+
+pub fn start_foreground_tracking(_own_pid: u32) -> anyhow::Result<()> {
+    todo!("Bitwarden does not yet support macOS autotype");
+}
+
+pub fn stop_foreground_tracking() -> anyhow::Result<()> {
+    todo!("Bitwarden does not yet support macOS autotype");
+}
+
+pub fn focus_last_window() -> anyhow::Result<()> {
+    todo!("Bitwarden does not yet support macOS autotype");
+}

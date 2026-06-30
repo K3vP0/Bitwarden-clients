@@ -32,6 +32,7 @@ import { LogService } from "@bitwarden/logging";
 import { UserId } from "@bitwarden/user-core";
 
 import { AutotypeConfig } from "../models/autotype-config";
+import { AutotypeVariant } from "../models/autotype-variant";
 import { AutotypeVaultData } from "../models/autotype-vault-data";
 import { DEFAULT_KEYBOARD_SHORTCUT } from "../models/main-autotype-keyboard-shortcut";
 
@@ -166,6 +167,37 @@ export class DesktopAutotypeService implements OnDestroy {
         takeUntil(this.destroy$),
       )
       .subscribe();
+  }
+
+  /**
+   * Emits whether autotype can currently be triggered for the active user
+   * (feature flag on, premium, user setting enabled, vault unlocked). Consumed by
+   * the vault UI to decide whether to show the autotype option on an item.
+   */
+  get autotypeEnabled$(): Observable<boolean> {
+    return this.autotypeFeatureEnabled$;
+  }
+
+  /**
+   * Triggers autotype for a specific, user-selected vault item. Focus is restored
+   * to the previously active window by the main process before typing.
+   */
+  async autotypeCipher(cipher: CipherView, variant: AutotypeVariant): Promise<void> {
+    if (this.platformUtilsService.getDevice() !== DeviceType.WindowsDesktop) {
+      return;
+    }
+
+    const login = cipher.login;
+    if (login == null) {
+      return;
+    }
+
+    const vaultData: AutotypeVaultData = {
+      username: login.username ?? "",
+      password: login.password ?? "",
+    };
+
+    ipc.autofill.autotypeForCipher(vaultData, variant);
   }
 
   // Returns an observable that represents whether autotype is enabled for the current user.
