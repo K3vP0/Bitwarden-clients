@@ -28,6 +28,18 @@ export class MainDesktopAutotypeService {
     this.autotypeKeyboardShortcut = new AutotypeKeyboardShortcut();
 
     this.registerIpcListeners();
+
+    // The context-menu autotype feature needs to know which window was focused
+    // before Bitwarden took the foreground. Track it for the app's lifetime on
+    // Windows. This is independent of the (premium/flag-gated) keyboard-shortcut
+    // feature, and only stores a window handle — never vault data.
+    if (process.platform === "win32") {
+      try {
+        autotype.startForegroundTracking(process.pid);
+      } catch {
+        this.logService.error("Failed to start autotype foreground tracking.");
+      }
+    }
   }
 
   registerIpcListeners() {
@@ -76,7 +88,7 @@ export class MainDesktopAutotypeService {
     });
   }
 
-  // Deregister the keyboard shortcut if registered and stop foreground tracking.
+  // Deregister the keyboard shortcut if registered.
   disableAutotype() {
     const formattedKeyboardShortcut = this.autotypeKeyboardShortcut.getElectronFormat();
 
@@ -86,12 +98,6 @@ export class MainDesktopAutotypeService {
     } else {
       this.logService.debug("Autotype is not registered, implicitly disabled.");
     }
-
-    try {
-      autotype.stopForegroundTracking();
-    } catch {
-      this.logService.error("Failed to stop autotype foreground tracking.");
-    }
   }
 
   dispose() {
@@ -100,21 +106,20 @@ export class MainDesktopAutotypeService {
     ipcMain.removeAllListeners(AUTOTYPE_IPC_CHANNELS.EXECUTE);
     ipcMain.removeAllListeners(AUTOTYPE_IPC_CHANNELS.EXECUTE_FOR_CIPHER);
 
-    // Also unregister the global shortcut and stop foreground tracking
+    if (process.platform === "win32") {
+      try {
+        autotype.stopForegroundTracking();
+      } catch {
+        this.logService.error("Failed to stop autotype foreground tracking.");
+      }
+    }
+
+    // Also unregister the global shortcut
     this.disableAutotype();
   }
 
   // Register the current keyboard shortcut if not already registered.
   private enableAutotype() {
-    // Track the foreground window so autotype can be triggered from the Bitwarden
-    // UI (e.g. an entry's context menu) and still type into the previously active
-    // application. Starting is idempotent.
-    try {
-      autotype.startForegroundTracking(process.pid);
-    } catch {
-      this.logService.error("Failed to start autotype foreground tracking.");
-    }
-
     const formattedKeyboardShortcut = this.autotypeKeyboardShortcut.getElectronFormat();
     if (globalShortcut.isRegistered(formattedKeyboardShortcut)) {
       this.logService.debug(

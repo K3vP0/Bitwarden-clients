@@ -488,17 +488,55 @@ describe("MainDesktopAutotypeService", () => {
   });
 
   describe("foreground tracking lifecycle", () => {
-    it("should start tracking when autotype is enabled", () => {
-      const toggleHandler = ipcHandlers.get(AUTOTYPE_IPC_CHANNELS.TOGGLE);
-      toggleHandler({}, true);
+    const originalPlatform = process.platform;
 
-      expect(autotype.startForegroundTracking).toHaveBeenCalledWith(process.pid);
+    const setPlatform = (platform: NodeJS.Platform) => {
+      Object.defineProperty(process, "platform", { value: platform, configurable: true });
+    };
+
+    afterEach(() => {
+      Object.defineProperty(process, "platform", { value: originalPlatform, configurable: true });
     });
 
-    it("should stop tracking when autotype is disabled", () => {
-      service.disableAutotype();
+    it("should start tracking on construction on Windows", () => {
+      setPlatform("win32");
+      jest.clearAllMocks();
+
+      const winService = new MainDesktopAutotypeService(mockLogService, mockWindowMain);
+
+      expect(autotype.startForegroundTracking).toHaveBeenCalledWith(process.pid);
+      winService.dispose();
+    });
+
+    it("should not start tracking on construction on non-Windows", () => {
+      setPlatform("linux");
+      jest.clearAllMocks();
+
+      const linuxService = new MainDesktopAutotypeService(mockLogService, mockWindowMain);
+
+      expect(autotype.startForegroundTracking).not.toHaveBeenCalled();
+      linuxService.dispose();
+    });
+
+    it("should stop tracking on dispose on Windows", () => {
+      setPlatform("win32");
+      const winService = new MainDesktopAutotypeService(mockLogService, mockWindowMain);
+      jest.clearAllMocks();
+
+      winService.dispose();
 
       expect(autotype.stopForegroundTracking).toHaveBeenCalled();
+    });
+
+    it("should not toggle tracking with the keyboard-shortcut feature", () => {
+      jest.clearAllMocks();
+      const toggleHandler = ipcHandlers.get(AUTOTYPE_IPC_CHANNELS.TOGGLE);
+
+      toggleHandler({}, true);
+      toggleHandler({}, false);
+
+      expect(autotype.startForegroundTracking).not.toHaveBeenCalled();
+      expect(autotype.stopForegroundTracking).not.toHaveBeenCalled();
     });
   });
 });

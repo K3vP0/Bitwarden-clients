@@ -170,12 +170,22 @@ export class DesktopAutotypeService implements OnDestroy {
   }
 
   /**
-   * Emits whether autotype can currently be triggered for the active user
-   * (feature flag on, premium, user setting enabled, vault unlocked). Consumed by
-   * the vault UI to decide whether to show the autotype option on an item.
+   * Emits whether the context-menu autotype action should be available for the
+   * active user. This is a local, non-premium capability: it only requires a
+   * supported platform (Windows) and an unlocked vault. It intentionally does not
+   * depend on premium or the server feature flag, so it also works against
+   * self-hosted servers such as Vaultwarden and fully offline.
    */
   get autotypeEnabled$(): Observable<boolean> {
-    return this.autotypeFeatureEnabled$;
+    if (this.platformUtilsService.getDevice() !== DeviceType.WindowsDesktop) {
+      return of(false);
+    }
+
+    return this.authService.activeAccountStatus$.pipe(
+      map((status) => status === AuthenticationStatus.Unlocked),
+      distinctUntilChanged(),
+      takeUntil(this.destroy$),
+    );
   }
 
   /**
