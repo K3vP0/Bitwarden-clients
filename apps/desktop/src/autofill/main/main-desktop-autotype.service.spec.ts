@@ -9,6 +9,7 @@ import { LogService } from "@bitwarden/logging";
 import { WindowMain } from "../../main/window.main";
 import { AutotypeConfig } from "../models/autotype-config";
 import { AutotypeMatchError } from "../models/autotype-errors";
+import { AutotypeVariant } from "../models/autotype-variant";
 import { AutotypeVaultData } from "../models/autotype-vault-data";
 import { AUTOTYPE_IPC_CHANNELS } from "../models/ipc-channels";
 import { AutotypeKeyboardShortcut } from "../models/main-autotype-keyboard-shortcut";
@@ -36,6 +37,9 @@ jest.mock("@bitwarden/desktop-napi", () => ({
   autotype: {
     getForegroundWindowTitle: jest.fn(),
     typeInput: jest.fn(),
+    startForegroundTracking: jest.fn(),
+    stopForegroundTracking: jest.fn(),
+    focusLastWindow: jest.fn(),
   },
 }));
 
@@ -398,6 +402,141 @@ describe("MainDesktopAutotypeService", () => {
         AUTOTYPE_IPC_CHANNELS.LISTEN,
         { windowTitle: "Notepad" },
       );
+    });
+  });
+
+  describe("EXECUTE_FOR_CIPHER handler", () => {
+    const originalPlatform = process.platform;
+
+    const setPlatform = (platform: NodeJS.Platform) => {
+      Object.defineProperty(process, "platform", { value: platform, configurable: true });
+    };
+
+    beforeEach(() => {
+      jest.useFakeTimers();
+    });
+
+    afterEach(() => {
+      jest.useRealTimers();
+      Object.defineProperty(process, "platform", { value: originalPlatform, configurable: true });
+    });
+
+    it("should register the EXECUTE_FOR_CIPHER IPC handler", () => {
+      expect(ipcMain.on).toHaveBeenCalledWith(
+        AUTOTYPE_IPC_CHANNELS.EXECUTE_FOR_CIPHER,
+        expect.any(Function),
+      );
+    });
+
+    it("should focus the previous window then type username + tab + password on Windows", () => {
+      setPlatform("win32");
+      const vaultData: AutotypeVaultData = { username: "user", password: "pass" };
+
+      const handler = ipcHandlers.get(AUTOTYPE_IPC_CHANNELS.EXECUTE_FOR_CIPHER);
+      handler({}, { vaultData, variant: AutotypeVariant.UsernamePassword });
+
+      expect(autotype.focusLastWindow).toHaveBeenCalled();
+      // Typing is deferred until the target window has settled into the foreground.
+      expect(autotype.typeInput).not.toHaveBeenCalled();
+
+      jest.advanceTimersByTime(200);
+
+      const expectedArray = Array.from("user\tpass").map((c) => c.charCodeAt(0));
+      expect(autotype.typeInput).toHaveBeenCalledWith(expectedArray, []);
+    });
+
+    it("should type only the password for the password variant", () => {
+      setPlatform("win32");
+      const vaultData: AutotypeVaultData = { username: "user", password: "pass" };
+
+      const handler = ipcHandlers.get(AUTOTYPE_IPC_CHANNELS.EXECUTE_FOR_CIPHER);
+      handler({}, { vaultData, variant: AutotypeVariant.Password });
+
+      jest.advanceTimersByTime(200);
+
+      const expectedArray = Array.from("pass").map((c) => c.charCodeAt(0));
+      expect(autotype.typeInput).toHaveBeenCalledWith(expectedArray, []);
+    });
+
+    it("should do nothing when not on Windows", () => {
+      setPlatform("linux");
+      const vaultData: AutotypeVaultData = { username: "user", password: "pass" };
+
+      const handler = ipcHandlers.get(AUTOTYPE_IPC_CHANNELS.EXECUTE_FOR_CIPHER);
+      handler({}, { vaultData, variant: AutotypeVariant.UsernamePassword });
+
+      jest.advanceTimersByTime(200);
+
+      expect(autotype.focusLastWindow).not.toHaveBeenCalled();
+      expect(autotype.typeInput).not.toHaveBeenCalled();
+    });
+
+    it("should not type if focusing the previous window fails", () => {
+      setPlatform("win32");
+      (autotype.focusLastWindow as jest.Mock).mockImplementationOnce(() => {
+        throw new Error("no window");
+      });
+      const vaultData: AutotypeVaultData = { username: "user", password: "pass" };
+
+      const handler = ipcHandlers.get(AUTOTYPE_IPC_CHANNELS.EXECUTE_FOR_CIPHER);
+      handler({}, { vaultData, variant: AutotypeVariant.UsernamePassword });
+
+      jest.advanceTimersByTime(200);
+
+      expect(autotype.typeInput).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("foreground tracking lifecycle", () => {
+    const originalPlatform = process.platform;
+
+    const setPlatform = (platform: NodeJS.Platform) => {
+      Object.defineProperty(process, "platform", { value: platform, configurable: true });
+    };
+
+    afterEach(() => {
+      Object.defineProperty(process, "platform", { value: originalPlatform, configurable: true });
+    });
+
+    it("should start tracking on construction on Windows", () => {
+      setPlatform("win32");
+      jest.clearAllMocks();
+
+      const winService = new MainDesktopAutotypeService(mockLogService, mockWindowMain);
+
+      expect(autotype.startForegroundTracking).toHaveBeenCalledWith(process.pid);
+      winService.dispose();
+    });
+
+    it("should not start tracking on construction on non-Windows", () => {
+      setPlatform("linux");
+      jest.clearAllMocks();
+
+      const linuxService = new MainDesktopAutotypeService(mockLogService, mockWindowMain);
+
+      expect(autotype.startForegroundTracking).not.toHaveBeenCalled();
+      linuxService.dispose();
+    });
+
+    it("should stop tracking on dispose on Windows", () => {
+      setPlatform("win32");
+      const winService = new MainDesktopAutotypeService(mockLogService, mockWindowMain);
+      jest.clearAllMocks();
+
+      winService.dispose();
+
+      expect(autotype.stopForegroundTracking).toHaveBeenCalled();
+    });
+
+    it("should not toggle tracking with the keyboard-shortcut feature", () => {
+      jest.clearAllMocks();
+      const toggleHandler = ipcHandlers.get(AUTOTYPE_IPC_CHANNELS.TOGGLE);
+
+      toggleHandler({}, true);
+      toggleHandler({}, false);
+
+      expect(autotype.startForegroundTracking).not.toHaveBeenCalled();
+      expect(autotype.stopForegroundTracking).not.toHaveBeenCalled();
     });
   });
 });

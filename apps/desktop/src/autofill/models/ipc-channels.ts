@@ -6,6 +6,7 @@ export const AUTOTYPE_IPC_CHANNELS = {
   LISTEN: "autofill.listenAutotypeRequest",
   EXECUTION_ERROR: "autofill.autotypeExecutionError",
   EXECUTE: "autofill.executeAutotype",
+  EXECUTE_FOR_CIPHER: "autofill.executeAutotypeForCipher",
 } as const;
 
 export const SSH_AGENT_IPC_CHANNELS = {

@@ -6,6 +6,7 @@ use windows::Win32::{
     UI::Input::KeyboardAndMouse::INPUT,
 };
 
+mod foreground_tracker;
 mod type_input;
 mod window_title;
 
@@ -38,6 +39,18 @@ impl ErrorOperations for Win32ErrorOperations {}
 
 pub fn get_foreground_window_title() -> Result<String> {
     window_title::get_foreground_window_title()
+}
+
+pub fn start_foreground_tracking(own_pid: u32) -> Result<()> {
+    foreground_tracker::start_foreground_tracking(own_pid)
+}
+
+pub fn stop_foreground_tracking() -> Result<()> {
+    foreground_tracker::stop_foreground_tracking()
+}
+
+pub fn focus_last_window() -> Result<()> {
+    foreground_tracker::focus_last_window()
 }
 
 /// `KeyboardShortcutInput` is an `INPUT` of one of the valid shortcut keys:

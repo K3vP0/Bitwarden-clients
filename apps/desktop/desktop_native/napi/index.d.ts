@@ -195,6 +195,19 @@ export declare namespace autostart {
 export declare namespace autotype {
   export function getForegroundWindowTitle(): string
   export function typeInput(input: Array<number>, keyboardShortcut: Array<string>): void
+  /**
+   * Starts tracking the most recent foreground window that does not belong to
+   * the Bitwarden process, so autotype can be triggered from the Bitwarden UI
+   * and still restore focus to the application the user was working in.
+   */
+  export function startForegroundTracking(ownPid: number): void
+  /** Stops tracking the foreground window. */
+  export function stopForegroundTracking(): void
+  /**
+   * Restores focus to the last recorded foreground window so that a subsequent
+   * `typeInput` call lands in that window.
+   */
+  export function focusLastWindow(): void
 }
 
 export declare namespace biometrics {

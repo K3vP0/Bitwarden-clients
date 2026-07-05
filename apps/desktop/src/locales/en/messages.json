@@ -4952,6 +4952,12 @@
   "editShortcut": {
     "message": "Edit shortcut"
   },
+  "autoTypeUsernameAndPassword": {
+    "message": "Auto-type username and password"
+  },
+  "autoTypePassword": {
+    "message": "Auto-type password"
+  },
   "archiveNoun": {
     "message": "Archive",
     "description": "Noun"

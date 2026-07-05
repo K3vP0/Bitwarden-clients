@@ -32,6 +32,7 @@ import { LogService } from "@bitwarden/logging";
 import { UserId } from "@bitwarden/user-core";
 
 import { AutotypeConfig } from "../models/autotype-config";
+import { AutotypeVariant } from "../models/autotype-variant";
 import { AutotypeVaultData } from "../models/autotype-vault-data";
 import { DEFAULT_KEYBOARD_SHORTCUT } from "../models/main-autotype-keyboard-shortcut";
 
@@ -166,6 +167,47 @@ export class DesktopAutotypeService implements OnDestroy {
         takeUntil(this.destroy$),
       )
       .subscribe();
+  }
+
+  /**
+   * Emits whether the context-menu autotype action should be available for the
+   * active user. This is a local, non-premium capability: it only requires a
+   * supported platform (Windows) and an unlocked vault. It intentionally does not
+   * depend on premium or the server feature flag, so it also works against
+   * self-hosted servers such as Vaultwarden and fully offline.
+   */
+  get autotypeEnabled$(): Observable<boolean> {
+    if (this.platformUtilsService.getDevice() !== DeviceType.WindowsDesktop) {
+      return of(false);
+    }
+
+    return this.authService.activeAccountStatus$.pipe(
+      map((status) => status === AuthenticationStatus.Unlocked),
+      distinctUntilChanged(),
+      takeUntil(this.destroy$),
+    );
+  }
+
+  /**
+   * Triggers autotype for a specific, user-selected vault item. Focus is restored
+   * to the previously active window by the main process before typing.
+   */
+  async autotypeCipher(cipher: CipherView, variant: AutotypeVariant): Promise<void> {
+    if (this.platformUtilsService.getDevice() !== DeviceType.WindowsDesktop) {
+      return;
+    }
+
+    const login = cipher.login;
+    if (login == null) {
+      return;
+    }
+
+    const vaultData: AutotypeVaultData = {
+      username: login.username ?? "",
+      password: login.password ?? "",
+    };
+
+    ipc.autofill.autotypeForCipher(vaultData, variant);
   }
 
   // Returns an observable that represents whether autotype is enabled for the current user.

@@ -13,6 +13,8 @@ import { CipherService } from "@bitwarden/common/vault/abstractions/cipher.servi
 import { CipherView } from "@bitwarden/common/vault/models/view/cipher.view";
 import { LogService } from "@bitwarden/logging";
 
+import { AutotypeVariant } from "../models/autotype-variant";
+
 import { DesktopAutotypeDefaultSettingPolicy } from "./desktop-autotype-policy.service";
 import { DesktopAutotypeService, getAutotypeVaultData } from "./desktop-autotype.service";
 
@@ -142,6 +144,7 @@ describe("DesktopAutotypeService", () => {
         listenAutotypeRequest: jest.fn(),
         configureAutotype: jest.fn(),
         toggleAutotype: jest.fn(),
+        autotypeForCipher: jest.fn(),
       },
     } as any;
 
@@ -179,6 +182,42 @@ describe("DesktopAutotypeService", () => {
     it("should initialize observables", () => {
       expect(service.autotypeEnabledUserSetting$).toBeDefined();
       expect(service.autotypeKeyboardShortcut$).toBeDefined();
+    });
+  });
+
+  describe("autotypeCipher", () => {
+    it("should send vault data and variant to the main process on Windows", async () => {
+      mockPlatformUtilsService.getDevice.mockReturnValue(DeviceType.WindowsDesktop);
+      const cipher = {
+        login: { username: "user", password: "pass" },
+      } as unknown as CipherView;
+
+      await service.autotypeCipher(cipher, AutotypeVariant.UsernamePassword);
+
+      expect(global.ipc.autofill.autotypeForCipher).toHaveBeenCalledWith(
+        { username: "user", password: "pass" },
+        AutotypeVariant.UsernamePassword,
+      );
+    });
+
+    it("should do nothing when not on Windows", async () => {
+      mockPlatformUtilsService.getDevice.mockReturnValue(DeviceType.MacOsDesktop);
+      const cipher = {
+        login: { username: "user", password: "pass" },
+      } as unknown as CipherView;
+
+      await service.autotypeCipher(cipher, AutotypeVariant.Password);
+
+      expect(global.ipc.autofill.autotypeForCipher).not.toHaveBeenCalled();
+    });
+
+    it("should not send when the cipher has no login", async () => {
+      mockPlatformUtilsService.getDevice.mockReturnValue(DeviceType.WindowsDesktop);
+      const cipher = { login: null } as unknown as CipherView;
+
+      await service.autotypeCipher(cipher, AutotypeVariant.UsernamePassword);
+
+      expect(global.ipc.autofill.autotypeForCipher).not.toHaveBeenCalled();
     });
   });
 
